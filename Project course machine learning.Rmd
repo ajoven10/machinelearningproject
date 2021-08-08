@@ -1,0 +1,136 @@
+---
+title: Predict how an exercise was performed from accelerometer data from the belt, forearm, and arm
+author: "Alberto Joven"
+date: "8/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Resumen
+
+In this project, our goal is to use accelerometer data on the belt, forearm, arm, and dumbbell from 6 participants. They were asked to perform correctly and incorrectly barbell lifts in 5 different ways. More information is available on the website here: <http://groupware.les.inf.puc-rio.br/har>..
+
+A model is built that predicts from the accelerometer data how the exercise has been performed
+
+# Load data
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+```{r}
+library(caret)
+library(knitr)
+training <- read.csv("D:/Data Science Specialization/pml-training.csv", na.strings=c("NA", ""))
+testing <- read.csv("D:/Data Science Specialization/pml-testing.csv", na.strings=c("NA",""))
+```
+
+
+# Review of the data
+
+Summary table of outcome variable labels and dimensions of the data frame:
+
+```{r}
+table(training$classe)
+dim(training)
+```
+
+We have 19622 observations of 160 variables (including the outcome variable: classe)
+
+## Suppression of variables with numerous missing data
+
+Suppression of variables for which more than 90% of the observations are not available:
+
+```{r}
+nas <- sapply(training, FUN="is.na")
+no_suprimir <- colSums(nas) <  dim(training)[1] * .9
+trainin <- training[no_suprimir]
+```
+
+The dataset has been reduced to 60 variables of the classes:
+
+```{r}
+tipos <- sapply(trainin, FUN="class")
+table(tipos)
+str(trainin[1:10])
+```
+Variables 1 to 7 are suppressed and the output variable is converted to a factor
+
+```{r}
+trainin <- trainin[, -c(1:7)]
+trainin$classe <- factor(trainin$classe)
+```
+
+We see if any variable has no value because it mostly has 0 o near 0 values.
+
+```{r}
+library(DT)
+tabla1 <- nearZeroVar(trainin[, -53], saveMetrics=TRUE)
+tabla1[, 1:2] <- round(tabla1[, 1:2], 3)
+datatable(tabla1)
+
+```
+
+## Covariate correlation matrix
+
+```{r}
+correlaciones <- cor(trainin[ , -53])
+datatable(round(correlaciones, 2), options=list(autoWidth=TRUE, scrollX=TRUE))
+```
+
+I suppress the variables that are strongly correlated, if two variables have a correlation coefficient greater than 0.9 I suppress one of the two.
+
+```{r, warning=FALSE, message=FALSE}
+eliminar= c("accel_belt_x", "accel_belt_y", "accel_belt_z", "gyros_arm_x",
+            "gyros_dumbbell_x", "gyros_dumbbell_z", "gyros_forearm_z",
+            "pitch_belt", "roll_belt")
+library(dplyr)
+trainin <- select(trainin, !eliminar )
+dim(trainin)
+```
+
+I will build the model with 43 explanatory variables to predict the label variable **class**.
+
+# Prediction model
+
+The observations are distributed in two groups, training and test, and the random forest model is applied to the training observations to predict the class variable in the test observations.
+
+A randomforest model has been chosen since of the models presented in the course: naive Bayes, decission threes, random forest is the one that offers the best results.
+
+```{r, warning=FALSE, message=FALSE}
+RNGversion("3.0.0")
+set.seed(123)
+
+intrain <- createDataPartition(y=trainin$classe, p=0.7, list=FALSE)
+trainin_f <- trainin[intrain,]
+test_f <- trainin[-intrain,]
+```
+
+Prediction model estimation
+
+```{r, warning=FALSE, message=FALSE}
+library(randomForest)
+modelo <- randomForest(classe ~ . , trainin_f, mtry=20)
+modelo
+```
+
+prediction vaues of data test
+
+```{r}
+pp2 <- predict(modelo, test_f)
+confusionMatrix(pp2, test_f$classe)
+```
+The result applied to the test group selected with the random partition of the training data, presents an excellent accuracy of 0.99. 
+
+# Application of the model to the 20 observations of the test file
+
+```{r}
+
+pp2 <- predict(modelo, testing)
+pp2
+
+```
+
